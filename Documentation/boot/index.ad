@@ -40,16 +40,20 @@ scons BootSystem=system
 Output (in `build/<arch>_<config>/boot/`):
 
 * `boot.bin` — Stage1 MBR boot sector (raw binary, 512 bytes)
-* `core.bin` — Stage2 protected mode loader (raw binary, includes the stage3 buffer)
+* `core.bin` — Stage2 protected mode loader (raw binary; stage3 is loaded into a fixed 512 KiB window at `0x100000`)
 * `corefs_fat.bin`, `corefs_ext2.bin`, `corefs_iso9660.bin` — Filesystem driver modules (one is merged into the boot image)
 * `libTheBootloader-<version>_<buildconfig>.so` — Stage3, dynamically loaded by stage2
 * `boot.efi` — EFI bootloader (stub, not yet functional)
 
 == Revision History
 
+=== v3.1
+
+Stage3 is loaded into a fixed 512 KiB window at `0x100000` instead of a buffer inside stage2 `.bss`, so `core.bin` no longer carries it.
+
 === v3.0
 
-Rewritten to match the current implementation: stage2 now initializes the corefs filesystem modules, loads stage3 (`libTheBootloader.so`) as a dynamic shared object and parses the boot configuration. Corrected the EFI architecture list (x86_64/aarch64 only) and the build outputs. Removed the obsolete allowed-boot-setups table.
+Rewritten to match the current implementation.
 
 === v2.0
 

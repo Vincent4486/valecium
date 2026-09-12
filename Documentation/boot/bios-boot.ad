@@ -7,90 +7,119 @@
 
 See also: link:index.html[Main Boot Page], link:efi-boot.html[EFI Boot Process], link:../roadmap.html[Roadmap]
 
-[cols="1,1,4,3",options="header"]
+[cols="1,1,3",options="header"]
 |===
-|Phase |Component |Description |Mechanism
+|Phase |Component |Description
 
 |Stage 1
 |Boot sector
-|The first 512 bytes of the disk, loaded by the BIOS at `0x7C00`. Loads stage2 from the sectors that follow it, or jumps straight to stage2 when booted via El Torito no-emulation (stage1 and stage2 are then loaded as one contiguous block).
-|INT 13h AH=42h (LBA via DAP); stage2 LBA/count patched in at install time; "VLSC" signature check for El Torito; `0xAA55` signature.
+|BIOS loads this at `0x7C00`. Which then loads stage2 base on patched variables at VLSP or jump directly if El-Torito.
 
-|Stage 2
+|Stage 2 (Real Mode)
 |Memory detection
-|Queries the BIOS for usable RAM regions and builds a Multiboot2 Boot Information structure at `0x6000` (basic memory info, boot device, memory map and framebuffer tags). The BIOS drive list is collected at `0x5100`.
-|INT 15h, EAX=0xE820; INT 12h; Multiboot2 tags.
+|Queries the BIOS for usable memory regions and builds a Multiboot2 Boot Information structure at `0x6000` which is passed to the protected mode stage2 and kernel.
 
-|Stage 2
+|Stage 2 (Real Mode)
 |A20 gate
 |Enables the A20 line so memory above 1 MB can be addressed.
-|Fast A20 via I/O port 0x92.
 
-|Stage 2
+|Stage 2 (Real Mode)
 |Video setup
-|Detects the available outputs (VBE, VGA graphics, VGA text, UART serial) and selects the preferred one. A VBE framebuffer is reported to stage2 through the Multiboot2 framebuffer tag.
-|VESA BIOS Extensions via INT 10h (real mode), framebuffer info in the MBI.
+|Detects the available outputs (VBE, VGA graphics, VGA text, UART) and selects the preferred one.
 
 |Transition
 |GDT setup
 |Defines a Global Descriptor Table with flat 4 GB code and data segments.
-|LGDT instruction.
 
 |Transition
 |Protected mode switch
 |Flips the CPU from 16-bit real mode to 32-bit protected mode and sets up a stack at `0x9FC00`.
-|Set bit 0 of CR0; far jump to flush the pipeline.
 
 |Stage 2
 |Filesystem init
 |Initializes the filesystem driver module (corefs) with the BIOS drive list and the partition label/UUID patched in at install time. The driver probes the partition table (MBR/GPT), finds the matching partition and mounts it.
-|`Initialize()` from the corefs exports table at `0x90000`; DISK_Read/DISK_ReadLBA callbacks via a real-mode thunk.
 
 |Stage 3
 |Dynamic loading
-|Reads `/boot/libTheBootloader-<version>_<config>.so` through the corefs filesystem into a 512 KB buffer, patches the "VLSO" callback structure and resolves the ELF relocations in place.
-|corefs Open/Read/Close; ELF `.dynsym`/`.symtab` plus SHT_REL (GLOB_DAT, JMP_SLOT, RELATIVE).
+|Reads `/boot/libTheBootloader-<version>_<config>.so` through the corefs filesystem into a fixed 512 KiB window at `0x100000`, patches the "VLSO" callback structure and resolves the ELF relocations in place.
 
 |Stage 3
 |Boot menu
 |Parses `/boot/TheBootloader.conf` (profiles, default entry, timeout) and draws the boot menu.
-|Configuration lexer, parser and validator in `boot/common/conf/`.
 
 |Future
 |Kernel loading
 |Load the kernel ELF and hand control over to it. Not yet implemented.
-|Planned; see `boot/TODO`.
 |===
 
 == Memory Map
 
-The BIOS boot path lives entirely in the first megabyte of conventional
-memory. The map below is not to scale: region sizes are proportional to
-their footprint, with small regions enlarged so they stay legible.
+Stage1, stage2 and the corefs module are in the first megabyte of
+conventional memory. Stage3 is loaded exactly at 1MiB, with a fixed 512 KiB window. 
 
-image::bios-boot-memory-map.png[BIOS/i686 conventional-memory map during boot]
+image::bios-boot-memory-map.svg[BIOS/i686 boot memory map]
 
 Key addresses:
 
-* `0x7C00` — stage1 boot sector (El Torito load address)
-* `0x7E00` — stage2 (`core.bin`)
-* `0xE900` — `stage3_buf[512 KB]`, the DL-loaded `.so` buffer
-* `0x90000` — corefs module (filesystem + disk I/O), above the `.so` buffer
-* `0x9FC00` — stage2 stack (grows down)
-* `0x100000` — kernel load (future)
+* `0x07C00` — stage1 boot sector
+* `0x07E00` — stage2 (`core.bin`)
+* `0x90000` — corefs module
+* `0x9FC00` — stage2 stack top
+* `0x100000` — stage3 buffer and kernel start
+
+=== Low memory used by disk.S
+
+`boot/bios/i686/disk.S` runs its real-mode half below 1 MiB. The 16-bit thunk
+is copied there on every call, so these addresses are in use during any disk
+operation (we use BIOS int 13h):
+
+[cols="1,1,4",options="header"]
+|===
+|Address |Size |Purpose
+
+|`0x00500`
+|88 Bytes
+|16-bit real-mode thunk, copied out of the corefs module by `x86_Int13_Thunk` (`thunk_start` to `thunk_end`)
+
+|`0x00600`
+|22 Bytes
+|INT 13h parameter block, `TP_IN_AX` through `TP_IN_SI`
+
+|`0x07000`
+|16 Bytes
+|AH=42h Disk Address Packet
+
+|`0x07C00`
+|—
+|real-mode stack top (`SS=0`, `SP=0x7C00`), grows down
+|===
+
+The 32-bit half of `disk.S` stays in the corefs module at `0x90000`. `0x00500` and `0x00600`
+alias the VBE buffers that `detect.S` fills.
+
+=== Kernel loading (future)
+
+The kernel is loaded at `0x100000`, the same address as the stage3 buffer, which means stage3 will be overwritten by the kernel. Therefore, stage3 will perform a handoff.
+
+. Stage 3 copies some of the code of itself to lower memory region that is unused.
+. It loads the kernel to `0x100000` and jumps to the kernel with multiboot info.
 
 == Current Implementation Status
 
 * Stage 1: Full MBR bootsector with LBA INT 13h support, El Torito no-emulation detection and metadata patching via the "VLSP" signature
 * Stage 2: A20 gate, GDT, protected mode switch, video output (VBE/VGA/VGA text/UART), corefs filesystem init, stage3 dynamic loading and configuration parsing — implemented; stops at the boot menu
-* Stage 3: Implemented as `libTheBootloader.so` (filesystem access, config parsing, boot menu)
-* Kernel loading and the final handoff: Not yet implemented
+* Stage 3: Implemented as `libTheBootloader.so` (filesystem access, config parsing, boot menu), loaded into the window at `0x100000`
+* Kernel loading and the final handoff: Not yet implemented; the planned trampoline handoff is described above
 
 == Revision History
 
+=== v3.1
+
+Code changes and updated graph to mermaid.
+
 === v3.0
 
-Rewritten to match the current implementation: stage3 is now a dynamically loaded shared object loaded through the corefs filesystem, video setup is implemented, and the obsolete "kernel at 0xa00000" handoff rows were replaced by the actual flow. Memory map addresses verified against the built images.
+Rewritten to match the current implementation.
 
 === v2.1
 

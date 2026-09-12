@@ -28,6 +28,9 @@ static void print_stage3_fs_location(void);
 #define MBI_TAG_MMAP 6
 #define MBI_TAG_FRAMEBUFFER 8
 
+#define STAGE3_BUF_ADDR 0x100000
+#define STAGE3_BUF_SIZE (512 * 1024)
+
 struct CoreFsOperations
 {
    int (*Initialize)(const uint8_t *, uint32_t, const uint8_t *,
@@ -252,14 +255,14 @@ void init_main_boot(void)
       return;
    }
 
-   static uint8_t stage3_buf[512 * 1024];
+   uint8_t *stage3_buf = (uint8_t *)STAGE3_BUF_ADDR;
    int total = 0;
    int rc;
 
-   while (total < (int)sizeof(stage3_buf))
+   while (total < STAGE3_BUF_SIZE)
    {
       rc = s_BootParams.corefs_ops->Read(fd, stage3_buf + total,
-                                         (int)sizeof(stage3_buf) - total);
+                                         STAGE3_BUF_SIZE - total);
       if (rc <= 0) break;
       total += rc;
    }

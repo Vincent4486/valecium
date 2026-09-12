@@ -139,7 +139,7 @@ stage2 entry (real mode, 0x7E00)
         |     +-- find partition matching label/UUID, mount it
         |
         +-- corefs->Open("/boot/libTheBootloader-<ver>_<config>.so")
-        +-- corefs->Read(...)   -- into stage3_buf (512 KB)
+        +-- corefs->Read(...)   -- into the stage3 window at 0x100000 (512 KB)
         +-- corefs->Close(...)
         |
         +-- patch "VLSO" signature with the DL callback struct
@@ -171,8 +171,8 @@ also shared between the modules.
 |Read-only filesystem driver: partition probing, directory traversal, file reads. One module per image.
 
 |`stage3_buf`
-|`0xE900` (512 KB)
-|Buffer that receives `libTheBootloader.so` before it is dynamically loaded.
+|`0x100000` (512 KB)
+|Fixed window that receives `libTheBootloader.so` before it is dynamically loaded. It sits outside stage2 `.bss`, so the module at `0x90000` can no longer collide with stage2 statics.
 
 |Stage2 stack
 |`0x9FC00`
@@ -182,31 +182,16 @@ also shared between the modules.
 Constraints:
 
 * All corefs modules are linked at the same address (`0x90000`) because only one is ever present in a given boot image.
-* Stage2 (including its 512 KB stage3 buffer) must fit between `0x7E00` and `0x90000` (~545 KB).
+* Stage2 and its `.bss` must fit between `0x7E00` and `0x90000` (~545 KB). They currently end at `0x1E6AB`, which leaves the module room and keeps it out of stage2 statics.
+* The module must fit between `0x90000` and the stack top at `0x9FC00` (roughly 63 KB; the largest module, fat, occupies `0x717F` including its own `.bss`).
 * The corefs module must fit between `0x90000` and the stack at `0x9FC00` (roughly 63 KB; current modules are about 8-12 KB).
 * The driver runs with real-mode BIOS services available (via the `disk.S` thunk) because `DISK_Read` ultimately issues INT 13h.
 
-== Alternatives Considered
-
-=== Partial linking at install time
-Linking `core.o` together with the chosen driver at image build time.
-Rejected because it requires the cross-linker on the machine that
-builds the image.
-
-=== Loading the driver from raw disk sectors at runtime
-Storing the driver in dedicated sectors next to stage2 and reading it
-at runtime (like stage1 loads stage2). Rejected because it adds boot
-media layout complexity for no gain: the driver fits comfortably inside
-the boot image.
-
-=== Function-address patch table ("VLPT") + Python bundler
-An earlier design where core_common.bin carried a patch table of
-function addresses ("VLPT") and a `bundle_core.py` script copied the
-driver's entry points into it. Superseded by the current approach, which
-appends the whole module at its link address and patches only its base
-address, the partition label and the partition UUID into stage2.
-
 == Revision History
+
+=== v2.1
+
+`stage3_buf` moved out of stage2 `.bss` into a fixed window at `0x100000`, which removes the overlap between the module at `0x90000` and stage2 statics (`vga.c s_Shadow`) and changes the stage2 size constraints.
 
 === v2.0
 
