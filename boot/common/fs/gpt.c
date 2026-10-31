@@ -12,14 +12,11 @@ typedef struct GptPartitionEntry GptPartitionEntry;
 
 static bool gpt_signature_valid(const uint8_t *sector);
 static bool gpt_guid_is_zero(const uint8_t *guid);
-static bool gpt_lba_to_chs(uint64_t lba, uint16_t *cylinder, uint8_t *head,
-                           uint8_t *sector);
 
 #define GPT_SECTOR_SIZE 512
 #define GPT_SIGNATURE_SIZE 8
 #define GPT_ENTRY_SIZE 128
 #define GPT_MAX_ENTRIES 128
-#define GPT_MAX_CHS_SECTOR 63
 #define GPT_MAX_ENTRY_SECTORS                                                  \
    ((GPT_MAX_ENTRIES * GPT_ENTRY_SIZE + GPT_SECTOR_SIZE - 1) / GPT_SECTOR_SIZE)
 #define GPT_MAX_OFFSET 0x7FFFFFFF
@@ -85,27 +82,14 @@ static bool gpt_guid_is_zero(const uint8_t *guid)
    return true;
 }
 
-static bool gpt_lba_to_chs(uint64_t lba, uint16_t *cylinder, uint8_t *head,
-                           uint8_t *sector)
-{
-   if (lba >= GPT_MAX_CHS_SECTOR) return false;
-
-   *cylinder = 0;
-   *head = 0;
-   *sector = (uint8_t)(lba + 1);
-   return true;
-}
-
 DL_INC
 bool GPT_Probe(int drive_id)
 {
-   uint8_t sector[GPT_SECTOR_SIZE];
-   uint16_t cylinder = 0;
-   uint8_t head = 0;
-   uint8_t sector_num = 0;
+   if (drive_id < 0x80 || drive_id >= 0xE0) return false;
 
-   if (!gpt_lba_to_chs(1, &cylinder, &head, &sector_num)) return false;
-   if (DISK_Read((uint8_t)drive_id, cylinder, sector_num, head, 1, sector) != 0)
+   uint8_t sector[GPT_SECTOR_SIZE];
+
+   if (DISK_ReadLBA((uint8_t)drive_id, 1, 1, sector) != 0)
       return false;
 
    return gpt_signature_valid(sector);
@@ -117,14 +101,9 @@ int GPT_List(int drive_id, int **offsets_out)
    static int offsets[GPT_MAX_ENTRIES];
    static uint8_t entry_sectors[GPT_MAX_ENTRY_SECTORS * GPT_SECTOR_SIZE];
    uint8_t header_sector[GPT_SECTOR_SIZE];
-   uint16_t cylinder = 0;
-   uint8_t head = 0;
-   uint8_t sector_num = 0;
 
-   if (!offsets_out) return -1;
-   if (!gpt_lba_to_chs(1, &cylinder, &head, &sector_num)) return -1;
-   if (DISK_Read((uint8_t)drive_id, cylinder, sector_num, head, 1,
-                 header_sector) != 0)
+   if (!offsets_out || drive_id < 0x80 || drive_id >= 0xE0) return -1;
+   if (DISK_ReadLBA((uint8_t)drive_id, 1, 1, header_sector) != 0)
       return -1;
 
    if (!gpt_signature_valid(header_sector)) return -1;
@@ -148,11 +127,10 @@ int GPT_List(int drive_id, int **offsets_out)
    if (entry_sectors_needed > GPT_MAX_ENTRY_SECTORS) return -1;
 
    uint64_t entry_lba = header->partition_entry_lba;
-   if (!gpt_lba_to_chs(entry_lba, &cylinder, &head, &sector_num)) return -1;
-   if (entry_lba + entry_sectors_needed > GPT_MAX_CHS_SECTOR) return -1;
+   if (entry_lba > UINT64_MAX - entry_sectors_needed) return -1;
 
-   if (DISK_Read((uint8_t)drive_id, cylinder, sector_num, head,
-                 (uint8_t)entry_sectors_needed, entry_sectors) != 0)
+   if (DISK_ReadLBA((uint8_t)drive_id, entry_lba,
+                    (uint16_t)entry_sectors_needed, entry_sectors) != 0)
       return -1;
 
    int count = 0;
