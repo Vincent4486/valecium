@@ -19,7 +19,7 @@ typedef struct CoreFsOperations CoreFsOperations;
 typedef struct MbiTagFramebuffer MbiTagFramebuffer;
 typedef struct BootParams BootParams;
 
-static void init_framebuffer_info();
+static int init_framebuffer_info(void);
 static void print_bios_drive_list(void);
 static void print_stage3_fs_location(void);
 
@@ -81,12 +81,22 @@ int g_PreferredOutput = OUTPUT_VGATEXT;
 static BootParams s_BootParams = {0};
 static DL_CallbackOperations s_DlCallbackOps = {0};
 
-static void init_framebuffer_info()
+static int init_framebuffer_info(void)
 {
+   uint8_t *base = (uint8_t *)s_BootParams.mbi_tags;
+   uint32_t total_size = *(uint32_t *)(base - 8);
    MbiTagFramebuffer *tag = s_BootParams.mbi_tags;
-   for (;;)
+
+   if (total_size < 16 || total_size > 0x1000)
+      return -EINVAL;
+   uint8_t *end = base + total_size - 8;
+
+   while ((uint8_t *)tag + 8 <= end)
    {
-      if (tag->type == MBI_TAG_END) break;
+      if (tag->size < 8 || tag->size > (size_t)(end - (uint8_t *)tag))
+         return -EINVAL;
+      if (tag->type == MBI_TAG_END)
+         return tag->size == 8 ? SUCCESS : -EINVAL;
 
       if (tag->type == MBI_TAG_FRAMEBUFFER &&
           tag->size >= sizeof(MbiTagFramebuffer))
@@ -113,6 +123,8 @@ static void init_framebuffer_info()
       tag = (MbiTagFramebuffer *)((uint8_t *)tag + tag->size);
       tag = (MbiTagFramebuffer *)(((uintptr_t)tag + 7) & ~(uintptr_t)7);
    }
+
+   return -EINVAL;
 }
 
 static void print_bios_drive_list(void)
@@ -163,7 +175,11 @@ void print_memory_map(void)
 
       if (type == MBI_TAG_MMAP)
       {
+         if (size < 16)
+            break;
          uint32_t entry_size = *(uint32_t *)(ptr + 8);
+         if (entry_size < 24 || (size - 16) % entry_size != 0)
+            break;
          /* uint32_t entry_version = *(uint32_t *)(ptr + 12); */
          uint8_t *entry = ptr + 16;
          uint32_t total_size = size - 16;
@@ -363,14 +379,17 @@ void init_conf(void)
 
 int main(const BootParams *boot_params)
 {
-   if (!boot_params || !boot_params->corefs_ops ||
+   int rc;
+   if (!boot_params || !boot_params->mbi_tags || !boot_params->corefs_ops ||
        !boot_params->corefs_ops->Initialize || !boot_params->corefs_ops->Open ||
        !boot_params->corefs_ops->Read || !boot_params->corefs_ops->Close)
       return -EINVAL;
 
    s_BootParams = *boot_params;
 
-   init_framebuffer_info();
+   rc = init_framebuffer_info();
+   if (rc != SUCCESS)
+      return rc;
 
    g_PreferredOutput = OUTPUT_UART; /* fallback  */
    if (s_BootParams.available_outputs & (1 << OUTPUT_VGATEXT))
@@ -380,7 +399,7 @@ int main(const BootParams *boot_params)
    if ((s_BootParams.available_outputs & (1 << OUTPUT_VBE)) && VBE_HasInfo())
       g_PreferredOutput = OUTPUT_VBE;
 
-   int rc = Video_Initialize();
+   rc = Video_Initialize();
    if (rc != SUCCESS)
       return rc;
 
