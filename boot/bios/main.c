@@ -321,7 +321,7 @@ static int init_main_boot(void)
       return -EINVAL;
    }
 
-   void *handle = DL_LoadLibrary(stage3_buf);
+   void *handle = DL_LoadLibrary(stage3_buf, (size_t)total, STAGE3_BUF_SIZE);
    if (!handle)
    {
       logfmt(LOG_ERROR, "  DL_LoadLibrary failed\n");
