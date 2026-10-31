@@ -247,6 +247,8 @@ static int init_fs(void)
 
 static int init_main_boot(void)
 {
+   int rc;
+   
    logfmt(LOG_INFO, "Loading libTheBootloader.\n");
 
    int fd = s_BootParams.corefs_ops->Open(THEBOOTLOADER_SO_PATH);
@@ -258,7 +260,7 @@ static int init_main_boot(void)
 
    uint8_t *stage3_buf = (uint8_t *)STAGE3_BUF_ADDR;
    int total = 0;
-   int rc;
+   int callback_found = 0;
 
    while (total < STAGE3_BUF_SIZE)
    {
@@ -266,6 +268,14 @@ static int init_main_boot(void)
                                          STAGE3_BUF_SIZE - total);
       if (rc <= 0) break;
       total += rc;
+   }
+
+   if (total == STAGE3_BUF_SIZE)
+   {
+      uint8_t extra;
+      rc = s_BootParams.corefs_ops->Read(fd, &extra, 1);
+      if (rc > 0)
+         rc = -ENOMEM;
    }
 
    s_BootParams.corefs_ops->Close(fd);
@@ -291,22 +301,24 @@ static int init_main_boot(void)
    s_DlCallbackOps.Video_PutPixel = Video_PutPixel;
    s_DlCallbackOps.logfmt = logfmt;
 
-   // Check for VLSO to patch callback address
-   for (int i = 0; i + 4 <= total;
-        i++) /* only iterate over bytes that were actually read */
+   for (int i = 0; i + 4 <= total; i++)
    {
-      if (stage3_buf[i] == 'V' && stage3_buf[i + 1] == 'L' &&
-          stage3_buf[i + 2] == 'S' && stage3_buf[i + 3] == 'O')
-      {
-#if defined(BIT32)
-         *(uint32_t *)(stage3_buf + i + 4) =
-             (uint32_t)(uintptr_t)&s_DlCallbackOps;
-#elif defined(BIT64)
-         *(uint64_t *)(stage3_buf + i + 4) =
-             (uint64_t)(uintptr_t)&s_DlCallbackOps;
-#endif
-         break;
-      }
+      size_t patch_size = sizeof(uintptr_t);
+      if (stage3_buf[i] != 'V' || stage3_buf[i + 1] != 'L' ||
+          stage3_buf[i + 2] != 'S' || stage3_buf[i + 3] != 'O' ||
+          i + 4 + patch_size > (size_t)total)
+         continue;
+
+      *(uintptr_t *)(stage3_buf + i + 4) =
+          (uintptr_t)&s_DlCallbackOps;
+      callback_found = 1;
+      break;
+   }
+
+   if (!callback_found)
+   {
+      logfmt(LOG_ERROR, "  Stage3 callback signature not found\n");
+      return -EINVAL;
    }
 
    void *handle = DL_LoadLibrary(stage3_buf);
