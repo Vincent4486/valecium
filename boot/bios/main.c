@@ -227,7 +227,7 @@ void print_corefs_memory_address(void)
    printf("Corefs Module location: %x.\n", s_BootParams.corefs_ops);
 }
 
-void init_fs(void)
+static int init_fs(void)
 {
    logfmt(LOG_INFO, "Entering filesystem setup.\n");
 
@@ -242,9 +242,10 @@ void init_fs(void)
    {
       logfmt(LOG_INFO, "  FS initialized successful.\n");
    }
+   return rc;
 }
 
-void init_main_boot(void)
+static int init_main_boot(void)
 {
    logfmt(LOG_INFO, "Loading libTheBootloader.\n");
 
@@ -252,7 +253,7 @@ void init_main_boot(void)
    if (fd < 0)
    {
       logfmt(LOG_ERROR, "  Failed to open %s: %d\n", THEBOOTLOADER_SO_PATH, fd);
-      return;
+      return fd;
    }
 
    uint8_t *stage3_buf = (uint8_t *)STAGE3_BUF_ADDR;
@@ -272,7 +273,7 @@ void init_main_boot(void)
    if (rc < 0 || total == 0)
    {
       logfmt(LOG_ERROR, "  Failed to read %s\n", THEBOOTLOADER_SO_PATH);
-      return;
+      return rc < 0 ? rc : -EIO;
    }
 
    logfmt(LOG_INFO, "  Read %d bytes from %s\n", total, THEBOOTLOADER_SO_PATH);
@@ -312,16 +313,17 @@ void init_main_boot(void)
    if (!handle)
    {
       logfmt(LOG_ERROR, "  DL_LoadLibrary failed\n");
-      return;
+      return -EINVAL;
    }
 
    if (dl_resolve_all(handle) != 0)
    {
       logfmt(LOG_ERROR, "  dl_resolve_all failed\n");
-      return;
+      return -EINVAL;
    }
 
    logfmt(LOG_INFO, "  Stage3 loaded and resolved successfully.\n");
+   return SUCCESS;
 }
 
 void init_conf(void)
@@ -349,6 +351,11 @@ void init_conf(void)
 
 int main(const BootParams *boot_params)
 {
+   if (!boot_params || !boot_params->corefs_ops ||
+       !boot_params->corefs_ops->Initialize || !boot_params->corefs_ops->Open ||
+       !boot_params->corefs_ops->Read || !boot_params->corefs_ops->Close)
+      return -EINVAL;
+
    s_BootParams = *boot_params;
 
    init_framebuffer_info();
@@ -361,7 +368,9 @@ int main(const BootParams *boot_params)
    if ((s_BootParams.available_outputs & (1 << OUTPUT_VBE)) && VBE_HasInfo())
       g_PreferredOutput = OUTPUT_VBE;
 
-   Video_Initialize();
+   int rc = Video_Initialize();
+   if (rc != SUCCESS)
+      return rc;
 
 #ifdef DEBUG
    print_available_outputs();
@@ -372,8 +381,14 @@ int main(const BootParams *boot_params)
    print_stage3_fs_location();
 #endif
 
-   init_fs();
-   init_main_boot();
+   rc = init_fs();
+   if (rc != SUCCESS)
+      return rc;
+
+   rc = init_main_boot();
+   if (rc != SUCCESS)
+      return rc;
+
    init_conf();
 
    g_MainBootOperations.LOGO_DrawOnScreen();
