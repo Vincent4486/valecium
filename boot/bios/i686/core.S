@@ -65,6 +65,13 @@ protected_mode_entry:
 	movw %ax, %ss
 	movl $0x9fc00, %esp
 
+	cld
+	movl $__bss_start, %edi
+	movl $__bss_end, %ecx
+	subl %edi, %ecx
+	xorl %eax, %eax
+	rep stosb
+
 	movl	$(MBI_BASE + 8), %eax
 	movl	%eax, boot_params
 	movl	corefs_start_address, %eax

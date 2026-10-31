@@ -178,6 +178,8 @@ static int s_CoreFsDriveId = -1;
 #endif
 
 #ifdef COREFS
+extern uint8_t __corefs_bss_start[];
+extern uint8_t __corefs_bss_end[];
 extern int DISK_Read(uint8_t drive, uint16_t cylinder, uint8_t sector,
                      uint8_t head, uint8_t count, void *buffer);
 extern int DISK_ReadLBA(uint8_t drive, uint64_t lba, uint16_t count,
@@ -1075,6 +1077,8 @@ static int corefs_Initialize(const uint8_t *bios_drive_list,
                              const uint8_t *partition_uuid,
                              const uint8_t *partition_label)
 {
+   for (uint8_t *ptr = __corefs_bss_start; ptr < __corefs_bss_end; ptr++)
+      *ptr = 0;
    int id = EXT2_Initialize(bios_drive_list, bios_drive_list_count,
                             partition_uuid, partition_label);
    if (id >= 0) s_CoreFsDriveId = id;
