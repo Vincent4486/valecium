@@ -213,6 +213,7 @@ static int check_partition(uint8_t drive, int part_lba,
    uint8_t buf[SECTOR_SIZE_ISO];
    uint64_t pvd_lba = 0;
    uint16_t pvd_count = 0;
+   int identity_requested = 0;
 
    if (drive < 0x80) return 0;
 
@@ -234,6 +235,7 @@ static int check_partition(uint8_t drive, int part_lba,
 
    if (expected_label && label_nonzero(expected_label))
    {
+      identity_requested = 1;
       if (label_match(&buf[VOLUME_LABEL_OFFSET], expected_label)) return 1;
    }
 
@@ -248,12 +250,15 @@ static int check_partition(uint8_t drive, int part_lba,
             break;
          }
       }
-      if (uuid_nonzero &&
-          mem_eq(&buf[VOLUME_UUID_OFFSET], expected_uuid, UUID_SIZE))
-         return 1;
+      if (uuid_nonzero)
+      {
+         identity_requested = 1;
+         if (mem_eq(&buf[VOLUME_UUID_OFFSET], expected_uuid, UUID_SIZE))
+            return 1;
+      }
    }
 
-   return 0;
+   return !identity_requested;
 }
 
 /* ------------------------------------------------------------------ */

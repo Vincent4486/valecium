@@ -752,6 +752,7 @@ static int check_partition(uint8_t bios_drive, int part_lba,
                            const uint8_t *expected_uuid)
 {
    uint8_t sector[SECTOR_SIZE];
+   int identity_requested = 0;
    uint64_t abs_lba = (uint64_t)(uint32_t)part_lba;
 
    if (DISK_ReadLBA(bios_drive, abs_lba, 1, sector) != 0) return 0;
@@ -781,6 +782,7 @@ static int check_partition(uint8_t bios_drive, int part_lba,
 
       if (label_nonzero)
       {
+         identity_requested = 1;
          const uint8_t *label_ptr;
          if (sector[BPB_SECTORS_PER_FAT16_OFF] == 0 &&
              sector[BPB_SECTORS_PER_FAT16_OFF + 1] == 0)
@@ -827,6 +829,7 @@ static int check_partition(uint8_t bios_drive, int part_lba,
 
       if (uuid_nonzero)
       {
+         identity_requested = 1;
          const uint8_t *vol_id_ptr;
          if (sector[BPB_SECTORS_PER_FAT16_OFF] == 0 &&
              sector[BPB_SECTORS_PER_FAT16_OFF + 1] == 0)
@@ -847,7 +850,7 @@ static int check_partition(uint8_t bios_drive, int part_lba,
       }
    }
 
-   return 1;
+   return !identity_requested;
 }
 
 DL_INC

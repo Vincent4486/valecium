@@ -766,8 +766,7 @@ static int check_partition(uint8_t bios_drive, int part_lba,
                            const uint8_t *expected_uuid)
 {
    uint8_t buf[SECTOR_SIZE];
-
-   (void)expected_uuid;
+   int identity_requested = 0;
 
    uint32_t sb_lba = SUPERBLOCK_OFFSET / SECTOR_SIZE;
    uint32_t sb_off = SUPERBLOCK_OFFSET % SECTOR_SIZE;
@@ -794,6 +793,7 @@ static int check_partition(uint8_t bios_drive, int part_lba,
 
       if (label_nonzero)
       {
+         identity_requested = 1;
          int match = 1;
          for (int i = 0; i < 16; i++)
          {
@@ -812,8 +812,25 @@ static int check_partition(uint8_t bios_drive, int part_lba,
       }
    }
 
-   // Accept any valid ext2 if no label check or no match
-   return 1;
+   if (expected_uuid)
+   {
+      int uuid_nonzero = 0;
+      int match = 1;
+      for (int i = 0; i < 16; i++)
+      {
+         if (expected_uuid[i] != 0)
+            uuid_nonzero = 1;
+         if (expected_uuid[i] != buf[sb_off + 104 + i])
+            match = 0;
+      }
+      if (uuid_nonzero)
+      {
+         identity_requested = 1;
+         if (match) return 1;
+      }
+   }
+
+   return !identity_requested;
 }
 
 DL_INC
@@ -824,8 +841,6 @@ int EXT2_Initialize(const uint8_t *bios_drive_list,
 {
    int drive_id;
    Ext2Drive *drive;
-
-   (void)partition_uuid;
 
    if (!bios_drive_list || bios_drive_list_count == 0)
    {
@@ -860,7 +875,8 @@ int EXT2_Initialize(const uint8_t *bios_drive_list,
 
          if (count <= 0)
          {
-            if (check_partition(bios_drive, 0, partition_label, NULL))
+            if (check_partition(bios_drive, 0, partition_label,
+                                partition_uuid))
             {
                drive->boot_drive = bios_drive;
                drive->part_start = 0;
@@ -871,7 +887,8 @@ int EXT2_Initialize(const uint8_t *bios_drive_list,
 
          for (int j = 0; j < count && !found; j++)
          {
-            if (check_partition(bios_drive, offsets[j], partition_label, NULL))
+            if (check_partition(bios_drive, offsets[j], partition_label,
+                                partition_uuid))
             {
                drive->boot_drive = bios_drive;
                drive->part_start = (uint32_t)offsets[j];
