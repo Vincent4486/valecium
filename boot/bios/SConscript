@@ -34,8 +34,7 @@ VideoPath = os.path.join(SourcePath, "bios", "video")
 
 MkfontPath = os.path.join(VideoPath, "mkfont.py")
 FontGenC = os.path.join(VideoPath, "font_gen.c")
-if os.path.exists(MkfontPath) and not os.path.exists(FontGenC):
-    subprocess.run([sys.executable, MkfontPath, FontGenC], check=True)
+subprocess.run([sys.executable, MkfontPath, FontGenC], check=True)
 
 # BIOS Source Files
 

@@ -49,12 +49,9 @@ ConfigureKernelEnvironment(
 # Generated Source Files
 
 MkisrsPath = os.path.join(ArchitecturePath, "cpu", "mkisrs.py")
-if os.path.exists(MkisrsPath):
-    IsrsGenC = os.path.join(ArchitecturePath, "cpu", "isrs_gen.c")
-    IsrsGenInc = os.path.join(ArchitecturePath, "cpu", "isrs_gen.inc")
-
-    if not os.path.exists(IsrsGenC) or not os.path.exists(IsrsGenInc):
-        subprocess.run([sys.executable, MkisrsPath, IsrsGenC, IsrsGenInc], check=True)
+IsrsGenC = os.path.join(ArchitecturePath, "cpu", "isrs_gen.c")
+IsrsGenInc = os.path.join(ArchitecturePath, "cpu", "isrs_gen.inc")
+subprocess.run([sys.executable, MkisrsPath, IsrsGenC, IsrsGenInc], check=True)
 
 # Source Files
 

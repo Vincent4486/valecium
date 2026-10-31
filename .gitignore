@@ -43,6 +43,7 @@ venv/
 # Editors and IDEs
 .DS_Store
 .idea/
+.thinkrail/
 .vscode/
 *~
 .*#
