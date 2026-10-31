@@ -320,7 +320,9 @@ detect_hardware:
 	testb	%ah, %ah
 	jz	.Ldrive_scan_next       /* AH=0 → drive not present      */
 
-	/* Drive present: record its number and advance. */
+	/* Keep one byte for the terminator before VBE scratch at 0x5200. */
+	cmpw	$255, %cx
+	jae	.Ldrive_scan_next
 	movb	%bl, %es:(%si)
 	incw	%si
 	incw	%cx
