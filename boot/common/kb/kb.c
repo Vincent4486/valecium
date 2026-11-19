@@ -12,10 +12,12 @@
 
 #include "kb.h"
 
+static char s_DefaultKeyboard[12];
+
 DL_INC
 int KB_Initialize(void)
 {
-    g_DlCallbackOps->logfmt(LOG_FATAL, "Not Implemented");
+    g_DlCallbackOps->logfmt(LOG_FATAL, "Not Implemented\n");
     return -ENOENT;
 }
 
@@ -26,13 +28,19 @@ int KB_RegisterCallback(
     void *userdata
 )
 {
-    g_DlCallbackOps->logfmt(LOG_FATAL, "Not Implemented");
+    g_DlCallbackOps->logfmt(LOG_FATAL, "Not Implemented\n");
     return -ENOENT;
 }
 
 DL_INC
 int KB_UnregisterCallback(int handle)
 {
-    g_DlCallbackOps->logfmt(LOG_FATAL, "Not Implemented");
+    g_DlCallbackOps->logfmt(LOG_FATAL, "Not Implemented\n");
     return -ENOENT;
+}
+
+DL_INC
+const char *KB_GetDefaultKB()
+{
+    return s_DefaultKeyboard;
 }

@@ -162,7 +162,7 @@ static void print_stage3_fs_location(void)
    printf(".\n");
 }
 
-void print_memory_map(void)
+static void print_memory_map(void)
 {
    uint8_t *ptr = (uint8_t *)s_BootParams.mbi_tags;
    printf("Memory Map:\n");
@@ -192,8 +192,8 @@ void print_memory_map(void)
             uint64_t len = *(uint64_t *)(entry + 8);
             uint32_t type2 = *(uint32_t *)(entry + 16);
 
-            printf("  base=%x\n", base);
-            printf("  len =%x\n", len);
+            printf("  base=%llx\n", (unsigned long long)base);
+            printf("  len =%llx\n", (unsigned long long)len);
             printf("  type=%d\n", (int)type2);
             printf("  --\n");
 
@@ -208,7 +208,7 @@ void print_memory_map(void)
 }
 
 /* Print which output systems are reported as available. */
-void print_available_outputs(void)
+static void print_available_outputs(void)
 {
    printf("Available outputs:\n");
 
@@ -221,7 +221,7 @@ void print_available_outputs(void)
       printf("  UART (COM1)\n");
 }
 
-void print_boot_drive_number(void)
+static void print_boot_drive_number(void)
 {
    char *driveType;
    if (s_BootParams.boot_drive == 0xe0)
@@ -238,9 +238,10 @@ void print_boot_drive_number(void)
    printf("  Booted from a %s.\n", driveType);
 }
 
-void print_corefs_memory_address(void)
+static void print_corefs_memory_address(void)
 {
-   printf("Corefs Module location: %x.\n", s_BootParams.corefs_ops);
+   printf("Corefs Module location: %p.\n",
+          (const void *)s_BootParams.corefs_ops);
 }
 
 static int init_fs(void)
@@ -354,17 +355,17 @@ static int init_main_boot(void)
    return SUCCESS;
 }
 
-void init_conf(void)
+static void init_conf(void)
 {
    CONF_GlobalBoot *conf = NULL;
    int rc;
 
-   logfmt(LOG_INFO, "Parsing config file: %s\n", THEBOOTLOADER_CONF_PATH);
+   logfmt(LOG_INFO, "Parsing config file: %s.\n", THEBOOTLOADER_CONF_PATH);
 
    rc = g_MainBootOperations.CONF_ParseConf(THEBOOTLOADER_CONF_PATH);
    if (rc != SUCCESS)
    {
-      logfmt(LOG_ERROR, "Config parse failed (%d), continuing without it\n",
+      logfmt(LOG_ERROR, "Config parse failed (%d), continuing without it.\n",
              rc);
       return;
    }
@@ -372,8 +373,36 @@ void init_conf(void)
    g_MainBootOperations.CONF_GetGlobal(&conf);
    if (conf)
    {
-      logfmt(LOG_INFO, "Loaded %d boot profile(s), default is '%s'\n",
+      logfmt(LOG_INFO, "Loaded %d boot profile(s), default is '%s'.\n",
              conf->profile_count, conf->profiles[conf->default_profile].name);
+   }
+}
+
+static void init_kb(void)
+{
+   int rc;
+
+   logfmt(LOG_INFO, "Initializing keyboard driver(s).\n");
+
+   rc = g_MainBootOperations.KB_Initialize();
+   if (rc != SUCCESS)
+   {
+      logfmt(LOG_ERROR,
+             "Failed to initialize keyboard driver(s) with error code %d, you "
+             "will not be able to use your keyboard.\n",
+             rc);
+      return;
+   }
+
+   const char *default_keyboard = g_MainBootOperations.KB_GetDefaultKB();
+   if (default_keyboard != NULL)
+   {
+      logfmt(LOG_INFO, "Using %s as primary keyboard device.\n",
+             default_keyboard);
+   }
+   else
+   {
+      logfmt(LOG_WARNING, "No keyboards detected.\n");
    }
 }
 
@@ -421,6 +450,7 @@ int main(const BootParams *boot_params)
       return rc;
 
    init_conf();
+   init_kb();
 
    g_MainBootOperations.LOGO_DrawOnScreen();
    for (;;)

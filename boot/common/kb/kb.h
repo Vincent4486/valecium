@@ -146,3 +146,4 @@ int KB_RegisterCallback(
     void *userdata
 );
 int KB_UnregisterCallback(int handle);
+const char *KB_GetDefaultKB();

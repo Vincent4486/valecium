@@ -138,9 +138,24 @@ def ExtractFullSignature(text: str, match_end: int, close_paren: int) -> str:
 
 
 def IsStatic(text: str, match_start: int) -> bool:
-    before = text[max(0, match_start - 64) : match_start]
-    words = before.split()
-    return "static" in words
+    i = match_start
+    while i > 0:
+        ch = text[i - 1]
+        if ch.isspace() or ch in "*[]()":
+            i -= 1
+            continue
+
+        if not (ch.isalnum() or ch == "_"):
+            return False
+
+        w_end = i
+        while i > 0 and (text[i - 1].isalnum() or text[i - 1] == "_"):
+            i -= 1
+
+        if text[i:w_end] == "static":
+            return True
+
+    return False
 
 
 def PrecedingMarkers(text: str, match_start: int) -> set[str]:
@@ -223,6 +238,31 @@ def CustomTypes(functions: list[tuple[str, str]]) -> set[str]:
     return custom
 
 
+def IterTypedefs(text: str):
+    for m in re.finditer(r"\btypedef\b", text):
+        i = m.end()
+        depth = 0
+        while i < len(text):
+            ch = text[i]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+            elif ch == ";" and depth == 0:
+                break
+            i += 1
+        yield text[m.end() : i]
+
+
+def TypedefDefines(text: str, type_name: str) -> bool:
+    for decl in IterTypedefs(text):
+        for m in re.finditer(r"\b" + re.escape(type_name) + r"\b", decl):
+            rest = decl[m.end() :].lstrip()
+            if not rest or rest[0] in "([)":
+                return True
+    return False
+
+
 def FindTypeHeaders(types: set[str]) -> list[str]:
     headers: list[str] = []
     for root, _dirs, files in os.walk(COMMON_DIR):
@@ -234,13 +274,10 @@ def FindTypeHeaders(types: set[str]) -> list[str]:
     missing: set[str] = set(types)
     for type_name in sorted(types):
         struct_re = re.compile(r"}\s*" + re.escape(type_name) + r"\s*;")
-        typedef_re = re.compile(
-            r"\btypedef\b[^;]*?\b" + re.escape(type_name) + r"\s*;"
-        )
         for h in headers:
             with open(h) as fh:
                 text = fh.read()
-            if struct_re.search(text) or typedef_re.search(text):
+            if struct_re.search(text) or TypedefDefines(text, type_name):
                 rel = h.relative_to(COMMON_DIR)
                 includes.add(str(rel).replace(os.sep, "/"))
                 missing.discard(type_name)

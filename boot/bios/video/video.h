@@ -83,9 +83,10 @@ void VGA_ClearScreen(Video_Color color); /* Clears the VGA screen */
 
 void putc(char c);          /* Write a single character. */
 void puts(const char *str); /* Write a null-terminated string. */
-void printf(const char *fmt,
-            ...); /* Formatted print, supports %[0width][l|ll]csdiu xXopb%. */
-void vprintf(const char *fmt, va_list args); /* Formatted print with va_list. */
+void printf(const char *fmt, ...) 
+    __attribute__((format(printf, 1, 2)));
+void vprintf(const char *fmt, va_list args)
+    __attribute__((format(printf, 1, 0)));
 void puti(int val);                          /* Write signed int as decimal. */
 void putd(int val);                          /* Write signed int as decimal. */
 void putl(long val);                         /* Write signed long as decimal. */
@@ -99,4 +100,6 @@ void puto(unsigned long long val);   /* Write unsigned long long as octal. */
 void putb(unsigned long long val);   /* Write unsigned long long as binary. */
 void putp(const void *ptr);          /* Write pointer as 0x hex. */
 
-void logfmt(int log_type, const char *fmt, ...); /* Log messages controlled. */
+/* Log messages controlled. */
+void logfmt(int log_type, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)));
