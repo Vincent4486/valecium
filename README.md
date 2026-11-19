@@ -4,7 +4,7 @@
 
 <h1 align="center">ValeciumOS</h1>
 
-Valecium OS is a Unix-like operating system project focused on low-level systems design, modular kernel architecture, and educational clarity.
+Valecium OS is a Unix-like operating system that is focused on low-level systems, modular kernel architecture, and study level code.
 
 This repository contains:
 
@@ -24,61 +24,33 @@ Primary source docs live in [`Documents/`](Documents/).
 
 Published docs are available at [docs.vyang.org/valecium](https://docs.vyang.org/valecium/).
 
-## Quick Start
+## Building
 
-### 1. Install host prerequisites
-
-You need Python 3 and SCons.
-
-Ubuntu example:
+### Native Build
 
 ```bash
+# Basic dependencies
 sudo apt install python3 scons
-```
 
-### 2. Install dependencies
+# Install extra deps and build toolchain
+scons deps && scons toolchain
 
-```bash
-scons deps
-```
-
-### 3. Build
-
-```bash
+# Build
 scons
 ```
 
-### 4. Run or debug
+### Docker Build
 
 ```bash
-scons run
-# or
-scons debug
+# Prebuilt docker image with toolchain and deps
+docker run --rm -v $(pwd):/build vincent4486/valeciumos-builder:i686 scons
 ```
 
 Notes:
 
 - Build settings are persisted in `.config` at repository root (auto-created on first run).
-- Toolchain setup is handled by the build flow (`--ensure`) and is also available explicitly via `scons toolchain`.
-- On macOS, image-building support is limited (notably due to `parted` availability). See [`Documents/building.ad`](Documents/building.ad).
-
-## Repository Guide
-
-Top-level directories and what they contain:
-
-- [`kernel/`](kernel/) - kernel source: CPU, memory, drivers, filesystems, syscalls, HAL, init
-- [`include/`](include/) - public and internal headers used by kernel/userspace
-- [`usr/`](usr/) - userspace components and libraries
-- [`image/`](image/) - disk image assembly logic and root image content
-- [`scripts/`](scripts/) - helper scripts for dependencies, toolchain, QEMU, GDB, formatting
-- [`Documents/`](Documents/) - AsciiDoc source for project documentation
-
-Important build files:
-
-- [`SConstruct`](SConstruct) - root build entrypoint and global configuration
-- [`kernel/SConscript`](kernel/SConscript) - kernel build rules
-- [`usr/SConscript`](usr/SConscript) - userspace build rules
-- [`image/SConscript`](image/SConscript) - image build rules
+- The output iso is at `build/<arch>_<type>/`
+- On OS X and Docker, disk image building via `scripts/disk_builder.py` is not supported because mounting is required.
 
 ## Build Configuration Reference
 
@@ -88,15 +60,6 @@ Common SCons variables:
 - `BuildArch`: `i686` (default), `x86_64`, `aarch64`
 - `BuildType`: `full` (default), `kernel`, `usr`, `image`
 - `BootType`: `bios` (default) or `efi`
-
-Examples:
-
-```bash
-scons BuildConfig=release
-scons BuildArch=x86_64 BuildConfig=release
-scons BuildType=kernel
-scons BootType=efi BuildArch=x86_64
-```
 
 For full build and platform notes, read [`Documents/building.ad`](Documents/building.ad).
 
