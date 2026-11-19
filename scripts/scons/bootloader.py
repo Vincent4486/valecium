@@ -32,8 +32,8 @@ BootloaderProfiles = {
             "x86_64",
             "aarch64",
         ],
-        "CompilerFlags": ["-DBOOTLOADER_EFI=1"],
-        "AssemblerFlags": ["-DBOOTLOADER_EFI=1"],
+        "CompilerFlags": ["-DBOOTLOADER_EFI"],
+        "AssemblerFlags": ["-DBOOTLOADER_EFI"],
     },
 }
 
