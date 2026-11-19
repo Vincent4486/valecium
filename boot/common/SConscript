@@ -33,3 +33,5 @@ SConscript("dl/SConscript", exports=[
 ])
 SConscript("conf/SConscript", exports=["Sources"])
 SConscript("video/SConscript", exports=["Sources"])
+SConscript("greet/SConscript", exports=["Sources"])
+SConscript("kb/SConscript", exports=["Sources"])
